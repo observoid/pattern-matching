@@ -76,7 +76,7 @@ export function mapCaptures<TInput, TCapIn, TCapOut>(
 }
 
 export function captureRepeatedMatch<TInput, TMatch>(
-  makeMatch: OperatorFunction<TInput, Match<TInput, TMatch>>,
+  matcher: OperatorFunction<TInput, Match<TInput, TMatch>>,
   minCount = 1,
   maxCount = Infinity
 ): OperatorFunction<TInput, Capture<TInput, TMatch>> {
@@ -88,7 +88,7 @@ export function captureRepeatedMatch<TInput, TMatch>(
         subscriber.complete();
         return;
       }
-      const sub = makeMatch(input).subscribe(
+      const sub = matcher(input).subscribe(
         ({ match, suffix }) => {
           subs.remove(sub);
           subscriber.next({ capture: match });
