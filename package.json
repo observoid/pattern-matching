@@ -1,0 +1,30 @@
+{
+  "name": "@observoid/pattern-matching",
+  "version": "0.1.0",
+  "description": "Generic pattern-matching constructs built on RxJS observable streams.",
+  "main": "lib/index.js",
+  "types": "lib/types.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/observoid/pattern-matching.git"
+  },
+  "keywords": [],
+  "author": "Duncan Cross",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/observoid/pattern-matching/issues"
+  },
+  "homepage": "https://github.com/observoid/pattern-matching#readme",
+  "devDependencies": {
+    "typescript": "^3.9.3"
+  },
+  "files": [
+    "lib/**/*"
+  ],
+  "dependencies": {
+    "rxjs": "^6.5.5"
+  }
+}
