@@ -1,6 +1,13 @@
 
 import { Observable, OperatorFunction, empty, ReplaySubject, Subscription } from 'rxjs';
 
+export interface Match<TInput, TMatch> {
+  match: TMatch;
+  suffix: Observable<TInput>;
+}
+
+export type MatchMaker<TInput, TMatch> = OperatorFunction<TInput, Match<TInput, TMatch>>;
+
 export interface CaptureValue<TCapture> {
   complete?: false;
   capture: TCapture;
@@ -13,7 +20,9 @@ export interface CaptureComplete<TInput> {
 
 export type Capture<TInput, TCapture> = CaptureValue<TCapture> | CaptureComplete<TInput>;
 
-export function captureAllInput<TInput>(): OperatorFunction<TInput, Capture<TInput, TInput>> {
+export type CaptureMaker<TInput, TCapture> = OperatorFunction<TInput, Capture<TInput, TCapture>>;
+
+export function captureAllInput<TInput>(): CaptureMaker<TInput, TInput> {
   return input => new Observable(subscriber => {
     return input.subscribe(
       capture => {
@@ -29,12 +38,7 @@ export function captureAllInput<TInput>(): OperatorFunction<TInput, Capture<TInp
   });
 }
 
-export interface Match<TInput, TMatch> {
-  match: TMatch;
-  suffix: Observable<TInput>;
-}
-
-export function matchAnyInput<TInput>(): OperatorFunction<TInput, Match<TInput, TInput>> {
+export function matchAnyInput<TInput>(): MatchMaker<TInput, TInput> {
   return input => new Observable(subscriber => {
     const subscription = new Subscription();
     let onComplete = () => subscriber.complete();
@@ -76,7 +80,7 @@ export function mapCaptures<TInput, TCapIn, TCapOut>(
 }
 
 export function captureRepeatedMatch<TInput, TMatch>(
-  matcher: OperatorFunction<TInput, Match<TInput, TMatch>>,
+  matcher: MatchMaker<TInput, TMatch>,
   minCount = 1,
   maxCount = Infinity
 ): OperatorFunction<TInput, Capture<TInput, TMatch>> {
@@ -110,8 +114,8 @@ export function captureRepeatedMatch<TInput, TMatch>(
 }
 
 export function matchTuple<TInput, TMatch, TTuple extends TMatch[]>(
-  ...matchers: { [P in keyof TTuple]: OperatorFunction<TInput, Match<TInput, TTuple[P]>> }
-): OperatorFunction<TInput, Match<TInput, TTuple>> {
+  ...matchers: { [P in keyof TTuple]: MatchMaker<TInput, TTuple[P]> }
+): MatchMaker<TInput, TTuple> {
   return input => new Observable(subscriber => {
     const tuple = new Array<TMatch>(matchers.length);
     const subs = new Subscription();
