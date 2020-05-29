@@ -24,6 +24,7 @@ export function captureAllInput<TInput>(): OperatorFunction<TInput, Capture<TInp
       },
       () => {
         subscriber.next({complete: true, suffix: empty()});
+        subscriber.complete();
       });
   });
 }
