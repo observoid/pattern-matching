@@ -1,6 +1,6 @@
 {
   "name": "@observoid/pattern-matching",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Generic pattern-matching constructs built on RxJS observable streams.",
   "main": "lib/index.js",
   "types": "lib/types.d.ts",
