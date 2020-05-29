@@ -54,3 +54,56 @@ export function matchAnyInput<TInput>(): OperatorFunction<TInput, Match<TInput, 
     return subscription;
   });
 }
+
+export function mapCaptures<TInput, TCapIn, TCapOut>(
+  mapFunc: (capture: TCapIn) => TCapOut
+): OperatorFunction<Capture<TInput, TCapIn>, Capture<TInput, TCapOut>> {
+  return input => new Observable(subscriber => {
+    return input.subscribe(
+      (step) => {
+        if (step.complete) {
+          subscriber.next(step);
+        }
+        else {
+          subscriber.next({capture: mapFunc(step.capture)});
+        }
+      },
+      (error) => subscriber.error(error),
+      () => subscriber.complete()
+    )
+  });
+}
+
+export function captureRepeatedMatch<TInput, TMatch>(
+  makeMatch: OperatorFunction<TInput, Match<TInput, TMatch>>,
+  minCount = 1,
+  maxCount = Infinity
+): OperatorFunction<TInput, Capture<TInput, TMatch>> {
+  return input => new Observable(subscriber => {
+    const subs = new Subscription();
+    function next(count: number, input: Observable<TInput>) {
+      if (count === maxCount) {
+        subscriber.next({complete:true, suffix:input});
+        subscriber.complete();
+        return;
+      }
+      const sub = makeMatch(input).subscribe(
+        ({ match, suffix }) => {
+          subs.remove(sub);
+          subscriber.next({ capture: match });
+          next(count + 1, suffix);
+        },
+        (error) => subscriber.error(error),
+        () => {
+          if (count >= minCount) {
+            subscriber.next({complete: true, suffix: input});
+          }
+          subscriber.complete();
+        },
+      );
+      subs.add(sub);      
+    }
+    next(0, input);
+    return subs;
+  });
+}
