@@ -108,3 +108,35 @@ export function captureRepeatedMatch<TInput, TMatch>(
     return subs;
   });
 }
+
+export function matchTuple<TInput, TMatch, TTuple extends TMatch[]>(
+  ...matchers: { [P in keyof TTuple]: OperatorFunction<TInput, Match<TInput, TTuple[P]>> }
+): OperatorFunction<TInput, Match<TInput, TTuple>> {
+  return input => new Observable(subscriber => {
+    const tuple = new Array<TMatch>(matchers.length);
+    const subs = new Subscription();
+    function next(i: number, tokens: Observable<TInput>) {
+      if (i === tuple.length) {
+        subscriber.next({match:tuple as TTuple, suffix:tokens});
+        subscriber.complete();
+        return;
+      }
+      const sub = matchers[i](tokens).subscribe(
+        ({ match, suffix }) => {
+          tuple[i] = match;
+          next(i + 1, suffix);
+          subs.remove(sub);
+        },
+        (error) => {
+          subscriber.error(error);
+        },
+        () => {
+          subscriber.complete();
+        }
+      );
+      subs.add(sub);
+    }
+    next(0, input);
+    return subs;
+  });
+}
