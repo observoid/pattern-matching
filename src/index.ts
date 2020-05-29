@@ -22,28 +22,61 @@ export type Capture<TInput, TCapture> = CaptureValue<TCapture> | CaptureComplete
 
 export type CaptureMaker<TInput, TCapture> = OperatorFunction<TInput, Capture<TInput, TCapture>>;
 
-export function captureAllInput<TInput>(): CaptureMaker<TInput, TInput> {
+export function captureInput<TInput>(
+  test: ((value: TInput) => boolean) | '*' = '*',
+  minCount = 0,
+  maxCount = Infinity
+): CaptureMaker<TInput, TInput> {
+  const testFunc = (test === '*') ? () => true : test;
   return input => new Observable(subscriber => {
-    return input.subscribe(
-      capture => {
-        subscriber.next({capture});
-      },
-      error => {
-        subscriber.error(error);
-      },
-      () => {
+    let count = 0;
+    const sub = new Subscription();
+    let onError = (e: any) => subscriber.error(e);
+    let onComplete = () => {
+      if (count >= minCount) {
         subscriber.next({complete: true, suffix: empty()});
-        subscriber.complete();
-      });
+      }
+      subscriber.complete();
+    };
+    let onValue = (value: TInput) => {
+      if (testFunc(value)) {
+        subscriber.next({capture: value});
+        if (++count < maxCount) return;
+      }
+      else if (count >= minCount) {
+        const suffix = new ReplaySubject<TInput>();
+        suffix.next(value);
+        onError = e => suffix.error(e);
+        onComplete = () => suffix.complete();
+        onValue = value => suffix.next(value);
+        subscriber.next({complete:true, suffix:suffix});
+      }
+      sub.unsubscribe();
+      subscriber.complete();
+    };
+    sub.add(input.subscribe(
+      value => onValue(value),
+      e => onError(e),
+      () => onComplete()
+    ));
+    return sub;
   });
 }
 
-export function matchAnyInput<TInput>(): MatchMaker<TInput, TInput> {
+export function matchInput<TInput>(
+  test: ((value: TInput) => boolean) | '*' = '*'
+): MatchMaker<TInput, TInput> {
+  const testFunc = test === '*' ? () => true : test;
   return input => new Observable(subscriber => {
     const subscription = new Subscription();
     let onComplete = () => subscriber.complete();
     let onError = (error: any) => subscriber.error(error);
     let onInput = (match: TInput) => {
+      if (!testFunc(match)) {
+        subscription.unsubscribe();
+        subscriber.complete();
+        return;
+      }
       const suffix = new ReplaySubject<TInput>();
       subscription.add(suffix);
       onInput = match => suffix.next(match);

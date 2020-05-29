@@ -1,16 +1,16 @@
 
 import { TestHarness } from 'zora';
-import { captureAllInput, CaptureValue, CaptureComplete, mapCaptures } from './index'
+import { captureInput, CaptureValue, CaptureComplete, mapCaptures } from './index'
 import { from, Observable } from 'rxjs';
 import { toArray } from 'rxjs/operators';
 
 export default (t: TestHarness) => {
 
-  t.test('captureAllInput', t => new Promise((resolve, reject) => {
+  t.test('captureInput', t => new Promise((resolve, reject) => {
     const testValues = ['banana', 33, true] as const;
     from(testValues)
     .pipe(
-      captureAllInput(),
+      captureInput(),
       toArray()
     )
     .subscribe({
@@ -46,7 +46,7 @@ export default (t: TestHarness) => {
     const testValues = [1, 2, 3];
     from(testValues)
     .pipe(
-      captureAllInput(),
+      captureInput(),
       mapCaptures(v => v * 100),
       toArray()
     )
