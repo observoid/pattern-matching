@@ -1,6 +1,6 @@
 
-import { captureAllInput, Capture, CaptureValue, CaptureComplete } from '../index'
-import { from } from 'rxjs';
+import { captureAllInput, CaptureValue, CaptureComplete } from '../index'
+import { from, Observable } from 'rxjs';
 import { toArray } from 'rxjs/operators';
 
 test('captureAllInput works', done => {
@@ -20,12 +20,21 @@ test('captureAllInput works', done => {
       }
       let last = (val[testValues.length] || {}) as CaptureComplete<any>;
       expect(last.complete).toBe(true);
-    },
-    complete() {
-      done();
+      expect(last.suffix).toBeInstanceOf(Observable);
+      last.suffix.pipe( toArray() ).subscribe({
+        next(val) {
+          expect(val).toHaveLength(0);
+        },
+        complete() {
+          done();
+        },
+        error(e) {
+          done(e);
+        },
+      });
     },
     error(e) {
-      throw e;
+      done(e);
     },
   });
 });
