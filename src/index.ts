@@ -39,19 +39,26 @@ export function captureInput<TInput>(
       subscriber.complete();
     };
     let onValue = (value: TInput) => {
+      let addValue;
       if (testFunc(value)) {
         subscriber.next({capture: value});
         if (++count < maxCount) {
           return;
         }
+        addValue = false;
       }
       else if (count < minCount) {
         subscriber.complete();
         subs.unsubscribe();
         return;
       }
+      else {
+        addValue = true;
+      }
       const suffix = new ReplaySubject<TInput>();
-      suffix.next(value);
+      if (addValue) {
+        suffix.next(value);
+      }
       onError = e => suffix.error(e);
       onComplete = () => suffix.complete();
       onValue = value => suffix.next(value);
