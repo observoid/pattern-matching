@@ -29,8 +29,8 @@ export function captureInput<TInput>(
 ): CaptureMaker<TInput, TInput> {
   const testFunc = (test === '*') ? () => true : test;
   return input => new Observable(subscriber => {
+    const subs = new Subscription();
     let count = 0;
-    const sub = new Subscription();
     let onError = (e: any) => subscriber.error(e);
     let onComplete = () => {
       if (count >= minCount) {
@@ -41,25 +41,29 @@ export function captureInput<TInput>(
     let onValue = (value: TInput) => {
       if (testFunc(value)) {
         subscriber.next({capture: value});
-        if (++count < maxCount) return;
+        if (++count < maxCount) {
+          return;
+        }
       }
-      else if (count >= minCount) {
-        const suffix = new ReplaySubject<TInput>();
-        suffix.next(value);
-        onError = e => suffix.error(e);
-        onComplete = () => suffix.complete();
-        onValue = value => suffix.next(value);
-        subscriber.next({complete:true, suffix:suffix});
+      else if (count < minCount) {
+        subscriber.complete();
+        subs.unsubscribe();
+        return;
       }
-      sub.unsubscribe();
+      const suffix = new ReplaySubject<TInput>();
+      suffix.next(value);
+      onError = e => suffix.error(e);
+      onComplete = () => suffix.complete();
+      onValue = value => suffix.next(value);
+      subscriber.next({complete:true, suffix:suffix});
       subscriber.complete();
     };
-    sub.add(input.subscribe(
+    subs.add(input.subscribe(
       value => onValue(value),
       e => onError(e),
       () => onComplete()
     ));
-    return sub;
+    return subs;
   });
 }
 
