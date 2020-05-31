@@ -29,6 +29,11 @@ export function captureInput<TInput>(
 ): CaptureMaker<TInput, TInput> {
   const testFunc = (test === '*') ? () => true : test;
   return input => new Observable(subscriber => {
+    if (maxCount < 1) {
+      subscriber.next({complete: true, suffix: input});
+      subscriber.complete();
+      return;
+    }
     const subs = new Subscription();
     let count = 0;
     let onError = (e: any) => subscriber.error(e);
