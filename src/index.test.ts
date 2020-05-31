@@ -46,20 +46,6 @@ export default (t: TestHarness) => {
 
   t.test('captureInput', async t => {
 
-    t.test('error', async t => {
-      const myError = new Error('test error');
-      let gotError, errorMessage;
-      try {
-        gotError = await onlyThrowsError(throwError(myError).pipe(captureInput()));
-        errorMessage = null;
-      }
-      catch (msg) {
-        gotError = null;
-        errorMessage = msg;
-      }
-      t.ok(gotError === myError, 'throws correct error');
-    });
-
     t.test('all input, any number', async t => {
       const val = await allValues(
         from(mixedContent)
@@ -100,6 +86,90 @@ export default (t: TestHarness) => {
       t.eq(suffixValues[0], true);
     });
 
+    t.test('all input, max count', async t => {
+      const val = await allValues(
+        from(mixedContent)
+        .pipe(
+          captureInput('*', 0, 2)
+        )
+      );
+      t.eq(val.length, 2 + 1);
+      for (let i = 0; i < 2; i++) {
+        let obj = (val[i] || {}) as CaptureValue<any>;
+        t.falsy(obj.complete);
+        t.eq(obj.capture, mixedContent[i]);
+      }
+      let last = (val[2] || {}) as CaptureComplete<any>;
+      t.eq(last.complete, true);
+      t.ok(last.suffix instanceof Observable);
+      const suffixValues = await allValues(last.suffix);
+      t.eq(suffixValues, mixedContent.slice(2));
+    });
+
+    t.test('filtered input, min count, failure', async t => {
+      const val = await allValues(
+        from(mixedContent)
+        .pipe(
+          captureInput(v => typeof v !== 'boolean', 3)
+        )
+      );
+      t.falsy(val[val.length-1]?.complete);
+    });
+
+    t.test('error on capture', async t => {
+      const myError = new Error('test error');
+      let gotError, errorMessage;
+      try {
+        gotError = await onlyThrowsError(throwError(myError).pipe(captureInput()));
+        errorMessage = null;
+      }
+      catch (msg) {
+        gotError = null;
+        errorMessage = msg;
+      }
+      t.ok(gotError === myError, 'throws correct error');
+    });
+
+    t.test('error on suffix', async t => {
+      const myError = new Error('test error');
+      const val = await allValues(
+        of( of(1), throwError(myError) )
+        .pipe(
+          concatAll(),
+          captureInput('*', 1, 1)
+        )
+      );
+      t.eq(val.length, 2);
+      let gotError;
+      try {
+        gotError = await onlyThrowsError(((val[1] || {}) as CaptureComplete<any>).suffix || empty());
+      }
+      catch (e) {
+        console.error(e);
+        gotError = null;
+      }
+      t.eq(gotError, myError, 'throws correct error');
+    });
+
+    t.test('error on suffix of zero length capture', async t => {
+      const myError = new Error('test error');
+      const val = await allValues(
+        throwError(myError)
+        .pipe(
+          captureInput('*', 0, 0)
+        )
+      );
+      t.eq(val.length, 1);
+      let gotError;
+      try {
+        gotError = await onlyThrowsError(((val[0] || {}) as CaptureComplete<any>).suffix || empty());
+      }
+      catch (e) {
+        console.error(e);
+        gotError = null;
+      }
+      t.eq(gotError, myError, 'throws correct error');
+    });
 
   });
 
