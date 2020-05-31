@@ -78,7 +78,6 @@ export function matchInput<TInput>(
         return;
       }
       const suffix = new ReplaySubject<TInput>();
-      subscription.add(suffix);
       onInput = match => suffix.next(match);
       onComplete = () => suffix.complete();
       onError = (error) => suffix.error(error);
