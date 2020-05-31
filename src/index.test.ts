@@ -1,6 +1,6 @@
 
 import { TestHarness, Assert } from 'zora';
-import { captureInput, CaptureValue, CaptureComplete, mapCaptures, matchInput } from '../lib/index'
+import { captureInput, CaptureValue, CaptureComplete, mapCaptures, matchInput, transformMatch } from '../lib/index'
 import { from, Observable, empty, throwError, Subscription, of } from 'rxjs';
 import { toArray, concatAll } from 'rxjs/operators';
 
@@ -279,6 +279,64 @@ export default (t: TestHarness) => {
         gotError = null;
       }
       t.eq(gotError, myError, 'throws correct error');
+    });
+
+  });
+
+  t.test('transformMatch', async t => {
+
+    t.test('success', async t => {
+      
+      const val = await allValues(
+        of(1, 2, 3)
+        .pipe(
+          matchInput(),
+          transformMatch(v => v * 10)
+        )
+      );
+
+      t.eq(val.length, 1);
+      t.eq(val[0].match, 1 * 10);
+
+      const suffixValues = await allValues(val[0].suffix);
+
+      t.eq(suffixValues, [2, 3]);
+
+    });
+
+    t.test('failure', async t => {
+      
+      const val = await allValues(
+        empty()
+        .pipe(
+          transformMatch(v => v)
+        )
+      );
+
+      t.eq(val.length, 0);
+
+    });
+
+    t.test('input error', async t => {
+      
+      const myError = new Error('test error');
+
+      let gotError, errorMessage;
+      try {
+        gotError = await onlyThrowsError(
+          throwError(myError)
+          .pipe(
+            transformMatch(v => v)
+          )
+        );
+        errorMessage = null;
+      }
+      catch (msg) {
+        gotError = null;
+        errorMessage = msg;
+      }
+      t.ok(gotError === myError, 'throws correct error');
+      
     });
 
   });

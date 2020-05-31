@@ -127,6 +127,18 @@ export function mapCaptures<TInput, TCapIn, TCapOut>(
   });
 }
 
+export function transformMatch<TInput, TFromMatch, TToMatch>(
+  transformFunc: (v: TFromMatch) => TToMatch
+): OperatorFunction<Match<TInput, TFromMatch>, Match<TInput, TToMatch>> {
+  return input => new Observable(subscriber => {
+    return input.subscribe(
+      ({ match, suffix }) => subscriber.next({match: transformFunc(match), suffix}),
+      e => subscriber.error(e),
+      () => subscriber.complete()
+    );
+  });
+}
+
 export function captureRepeatedMatch<TInput, TMatch>(
   matcher: MatchMaker<TInput, TMatch>,
   minCount = 1,
