@@ -1,8 +1,8 @@
 
 import { TestHarness, Assert } from 'zora';
-import { captureInput, CaptureValue, CaptureComplete, mapCaptures } from '../lib/index'
-import { from, Observable, empty, throwError, Subscription } from 'rxjs';
-import { toArray } from 'rxjs/operators';
+import { captureInput, CaptureValue, CaptureComplete, mapCaptures, matchInput } from '../lib/index'
+import { from, Observable, empty, throwError, Subscription, of } from 'rxjs';
+import { toArray, concatAll } from 'rxjs/operators';
 
 function allValues<T>(obs: Observable<T>): Promise<T[]> {
   return new Promise((resolve, reject) => {
@@ -121,6 +121,96 @@ export default (t: TestHarness) => {
     t.eq(last.complete, true);
     t.ok(last.suffix instanceof Observable);
     await assertEmptyObservable(t, last.suffix);
+  });
+
+  t.test('matchInput', async t => {
+
+    t.test('any input', async t => {
+      const val = await allValues(
+        from(mixedContent)
+        .pipe(
+          matchInput(),
+        )
+      );
+      t.eq(val.length, 1);
+      t.eq(val[0].match, mixedContent[0]);
+      const suffixValues = await allValues(val[0].suffix);
+      t.eq(suffixValues.length, mixedContent.length-1);
+      for (let i = 1; i < mixedContent.length; i++) {
+        t.eq(suffixValues[i-1], mixedContent[i]);
+      }
+    });
+
+    t.test('filtered input, success', async t => {
+      const val = await allValues(
+        from(mixedContent)
+        .pipe(
+          matchInput(v => typeof v === 'string'),
+        )
+      );
+      t.eq(val.length, 1);
+      t.eq(val[0].match, mixedContent[0]);
+      const suffixValues = await allValues(val[0].suffix);
+      t.eq(suffixValues.length, mixedContent.length-1);
+      for (let i = 1; i < mixedContent.length; i++) {
+        t.eq(suffixValues[i-1], mixedContent[i]);
+      }
+    });
+
+    t.test('filtered input, failure', async t => {
+      const val = await allValues(
+        from(mixedContent)
+        .pipe(
+          matchInput(_ => false),
+        )
+      );
+      t.eq(val.length, 0);
+    });
+
+    t.test('no input', async t => {
+      const val = await allValues(
+        empty()
+        .pipe(
+          matchInput(),
+        )
+      );
+      t.eq(val.length, 0);
+    });
+
+    t.test('error on match', async t => {
+      const myError = new Error('test error');
+      let gotError, errorMessage;
+      try {
+        gotError = await onlyThrowsError(throwError(myError).pipe(matchInput()));
+        errorMessage = null;
+      }
+      catch (msg) {
+        gotError = null;
+        errorMessage = msg;
+      }
+      t.ok(gotError === myError, 'throws correct error');
+    });
+
+    t.test('error on suffix', async t => {
+      const myError = new Error('test error');
+      const val = await allValues(
+        of( of(1), throwError(myError) )
+        .pipe(
+          concatAll(),
+          matchInput()
+        )
+      );
+      t.eq(val.length, 1);
+      let gotError;
+      try {
+        gotError = await onlyThrowsError((val[0] || {}).suffix || empty());
+      }
+      catch (e) {
+        gotError = null;
+      }
+      t.eq(gotError, myError, 'throws correct error');
+    });
+
   });
 
 }
