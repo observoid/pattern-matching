@@ -29,8 +29,13 @@ export function captureInput<TInput>(
 ): CaptureMaker<TInput, TInput> {
   const testFunc = (test === '*') ? () => true : test;
   return input => new Observable(subscriber => {
+    if (maxCount < 1) {
+      subscriber.next({complete: true, suffix: input});
+      subscriber.complete();
+      return;
+    }
+    const subs = new Subscription();
     let count = 0;
-    const sub = new Subscription();
     let onError = (e: any) => subscriber.error(e);
     let onComplete = () => {
       if (count >= minCount) {
@@ -39,27 +44,38 @@ export function captureInput<TInput>(
       subscriber.complete();
     };
     let onValue = (value: TInput) => {
+      let addValue;
       if (testFunc(value)) {
         subscriber.next({capture: value});
-        if (++count < maxCount) return;
+        if (++count < maxCount) {
+          return;
+        }
+        addValue = false;
       }
-      else if (count >= minCount) {
-        const suffix = new ReplaySubject<TInput>();
+      else if (count < minCount) {
+        subscriber.complete();
+        subs.unsubscribe();
+        return;
+      }
+      else {
+        addValue = true;
+      }
+      const suffix = new ReplaySubject<TInput>();
+      if (addValue) {
         suffix.next(value);
-        onError = e => suffix.error(e);
-        onComplete = () => suffix.complete();
-        onValue = value => suffix.next(value);
-        subscriber.next({complete:true, suffix:suffix});
       }
-      sub.unsubscribe();
+      onError = e => suffix.error(e);
+      onComplete = () => suffix.complete();
+      onValue = value => suffix.next(value);
+      subscriber.next({complete:true, suffix:suffix});
       subscriber.complete();
     };
-    sub.add(input.subscribe(
+    subs.add(input.subscribe(
       value => onValue(value),
       e => onError(e),
       () => onComplete()
     ));
-    return sub;
+    return subs;
   });
 }
 
@@ -78,7 +94,6 @@ export function matchInput<TInput>(
         return;
       }
       const suffix = new ReplaySubject<TInput>();
-      subscription.add(suffix);
       onInput = match => suffix.next(match);
       onComplete = () => suffix.complete();
       onError = (error) => suffix.error(error);
@@ -109,6 +124,18 @@ export function mapCaptures<TInput, TCapIn, TCapOut>(
       (error) => subscriber.error(error),
       () => subscriber.complete()
     )
+  });
+}
+
+export function transformMatch<TInput, TFromMatch, TToMatch>(
+  transformFunc: (v: TFromMatch) => TToMatch
+): OperatorFunction<Match<TInput, TFromMatch>, Match<TInput, TToMatch>> {
+  return input => new Observable(subscriber => {
+    return input.subscribe(
+      ({ match, suffix }) => subscriber.next({match: transformFunc(match), suffix}),
+      e => subscriber.error(e),
+      () => subscriber.complete()
+    );
   });
 }
 
