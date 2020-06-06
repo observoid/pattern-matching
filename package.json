@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "pretest": "npm run build",
-    "test": "c8 -r json -r text ts-node ./node_modules/pta/src/cli.js src/**/*.test.ts",
+    "test": "c8 -r json -r text -x src/**/*.test.ts ts-node ./node_modules/pta/src/cli.js src/**/*.test.ts",
     "prepublishOnly": "npm run build"
   },
   "repository": {
