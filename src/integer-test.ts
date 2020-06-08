@@ -11,6 +11,8 @@ export namespace IntegerTest {
     NONE = 'none',
     BAND32 = 'band32',
     INVERTED = 'inverted',
+    UNION = 'union',
+    INTERSECTION = 'intersection',
   }
 
   export interface Exact {
@@ -56,9 +58,19 @@ export namespace IntegerTest {
     readonly invert: IntegerTest;
   }
 
+  export interface Union {
+    readonly type: Type.UNION;
+    readonly tests: readonly IntegerTest[];
+  }
+
+  export interface Intersection {
+    readonly type: Type.INTERSECTION;
+    readonly tests: readonly IntegerTest[];
+  }
+
 }
 
-export type IntegerTest = IntegerTest.Exact | IntegerTest.Set | IntegerTest.Ranges | IntegerTest.All | IntegerTest.None | IntegerTest.BitAnd32 | IntegerTest.Inverted;
+export type IntegerTest = IntegerTest.Exact | IntegerTest.Set | IntegerTest.Ranges | IntegerTest.All | IntegerTest.None | IntegerTest.BitAnd32 | IntegerTest.Inverted | IntegerTest.Union | IntegerTest.Intersection;
 
 type Compatible = number | Iterable<number> | Iterable<IntegerTest.Range> | boolean | IntegerTest;
 
@@ -143,6 +155,18 @@ export function testInteger(value: number, test: Compatible): boolean {
     case IntegerTest.Type.INVERTED: {
       return !testInteger(value, testObject.invert);
     }
+    case IntegerTest.Type.UNION: {
+      for (const test of testObject.tests) {
+        if (testInteger(value, test)) return true;
+      }
+      return false;
+    }
+    case IntegerTest.Type.INTERSECTION: {
+      for (const test of testObject.tests) {
+        if (!testInteger(value, test)) return false;
+      }
+      return true;
+    }
   }
 }
 
@@ -156,6 +180,34 @@ export function invertIntegerTest(test: Compatible): IntegerTest {
     case IntegerTest.Type.ALL: return NO_INTEGERS;
     case IntegerTest.Type.NONE: return ALL_INTEGERS;
     case IntegerTest.Type.INVERTED: return testObject.invert;
+    case IntegerTest.Type.UNION: {
+      return {type:IntegerTest.Type.INTERSECTION, tests: testObject.tests.map(v => invertIntegerTest(v))};
+    }
+    case IntegerTest.Type.INTERSECTION: {
+      return {type:IntegerTest.Type.UNION, tests: testObject.tests.map(v => invertIntegerTest(v))};
+    }
     default: return {type: IntegerTest.Type.INVERTED, invert: testObject};
   }
+}
+
+export function integerTestUnion(...tests: Compatible[]): IntegerTest {
+  const testObjects = tests.map(toIntegerTest);
+  if (testObjects.length === 0) return NO_INTEGERS;
+  if (testObjects.length === 1) return testObjects[0];
+  for (let i = 0; i < testObjects.length; i++) {
+    if (testObjects[i].type === IntegerTest.Type.ALL) return ALL_INTEGERS;
+  }
+  return {type:IntegerTest.Type.UNION, tests: testObjects};
+/* c8 ignore next */
+}
+
+export function integerTestIntersection(...tests: Compatible[]): IntegerTest {
+  const testObjects = tests.map(toIntegerTest);
+  if (testObjects.length === 0) return ALL_INTEGERS;
+  if (testObjects.length === 1) return testObjects[0];
+  for (let i = 0; i < testObjects.length; i++) {
+    if (testObjects[i].type === IntegerTest.Type.NONE) return NO_INTEGERS;
+  }
+  return {type:IntegerTest.Type.INTERSECTION, tests: testObjects};
+/* c8 ignore next */
 }

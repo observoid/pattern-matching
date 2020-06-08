@@ -1,6 +1,9 @@
 
 import { TestHarness } from 'zora';
-import IntegerTest, { toIntegerTest, testInteger, ALL_INTEGERS, NO_INTEGERS, maskedAnd32, invertIntegerTest } from '../lib/integer-test';
+import IntegerTest, {
+  toIntegerTest, testInteger, ALL_INTEGERS, NO_INTEGERS, maskedAnd32,
+  invertIntegerTest, integerTestUnion, integerTestIntersection,
+} from '../lib/integer-test';
 
 export default (t: TestHarness) => {
   t.test('toIntegerTest', t => {
@@ -45,5 +48,35 @@ export default (t: TestHarness) => {
     t.eq(invertIntegerTest(inverted), {type: IntegerTest.Type.EXACT, value: 100});
     t.eq(invertIntegerTest(true), {type: IntegerTest.Type.NONE});
     t.eq(invertIntegerTest(false), {type: IntegerTest.Type.ALL});
+  });
+  t.test('integerTestUnion', t => {
+    const union = integerTestUnion([{min:300, max:400}], maskedAnd32(1, 0));
+    t.eq(union, {type: IntegerTest.Type.UNION, tests: [{type: IntegerTest.Type.RANGES, ranges: [{min:300, max:400}]}, {type: IntegerTest.Type.BAND32, mask: 1, testMasked: {type: IntegerTest.Type.EXACT, value: 0}}]});
+    t.ok(testInteger(2, union));
+    t.notOk(testInteger(5, union));
+    t.ok(testInteger(305, union));
+    t.notOk(testInteger(405, union));
+    t.eq(integerTestUnion(), {type: IntegerTest.Type.NONE});
+    t.eq(integerTestUnion(11), {type: IntegerTest.Type.EXACT, value:11});
+    t.eq(integerTestUnion([{min:300, max:400}], true, maskedAnd32(1, 0)), {type: IntegerTest.Type.ALL});
+    t.eq(invertIntegerTest(union).type, IntegerTest.Type.INTERSECTION);
+  });
+  t.test('integerTestIntersection', t => {
+    const isctn = integerTestIntersection([{min:300, max:400}], maskedAnd32(1, 0));
+    t.eq(isctn, {type: IntegerTest.Type.INTERSECTION, tests: [{type: IntegerTest.Type.RANGES, ranges: [{min:300, max:400}]}, {type: IntegerTest.Type.BAND32, mask: 1, testMasked: {type: IntegerTest.Type.EXACT, value: 0}}]});
+    t.notOk(testInteger(298, isctn));
+    t.notOk(testInteger(299, isctn));
+    t.ok(testInteger(300, isctn));
+    t.notOk(testInteger(301, isctn));
+    t.ok(testInteger(302, isctn));
+    t.ok(testInteger(398, isctn));
+    t.notOk(testInteger(399, isctn));
+    t.ok(testInteger(400, isctn));
+    t.notOk(testInteger(401, isctn));
+    t.notOk(testInteger(402, isctn));
+    t.eq(integerTestIntersection(), {type: IntegerTest.Type.ALL});
+    t.eq(integerTestIntersection(11), {type: IntegerTest.Type.EXACT, value:11});
+    t.eq(integerTestIntersection([{min:300, max:400}], false, maskedAnd32(1, 0)), {type: IntegerTest.Type.NONE});
+    t.eq(invertIntegerTest(isctn).type, IntegerTest.Type.UNION);
   });
 };
