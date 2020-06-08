@@ -1,6 +1,6 @@
 
 import { TestHarness } from 'zora';
-import IntegerTest, { toIntegerTest, testInteger, ALL_INTEGERS, NO_INTEGERS } from '../lib/integer-test';
+import IntegerTest, { toIntegerTest, testInteger, ALL_INTEGERS, NO_INTEGERS, maskedAnd32 } from '../lib/integer-test';
 
 export default (t: TestHarness) => {
   t.test('toIntegerTest', t => {
@@ -30,5 +30,11 @@ export default (t: TestHarness) => {
     t.ok(testInteger(35, [{min:10, max:20}, {min:30, max:40}]));
     t.ok(testInteger(40, [{min:10, max:20}, {min:30, max:40}]));
     t.notOk(testInteger(45, [{min:10, max:20}, {min:30, max:40}]));
+  });
+  t.test('maskedAnd32', t => {
+    const mask = maskedAnd32(0xff00, 0x3a00);
+    t.eq(mask, {type: IntegerTest.Type.BAND32, mask: 0xff00, testMasked: {type: IntegerTest.Type.EXACT, value: 0x3a00}});
+    t.ok(testInteger(0x3a72, mask));
+    t.notOk(testInteger(0x1a72, mask));
   });
 };

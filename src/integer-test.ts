@@ -9,6 +9,7 @@ export namespace IntegerTest {
     RANGES = 'ranges',
     ALL = 'all',
     NONE = 'none',
+    BAND32 = 'band32',
   }
 
   export interface Exact {
@@ -43,9 +44,15 @@ export namespace IntegerTest {
     readonly type: Type.NONE;
   }
 
+  export interface BitAnd32 {
+    readonly type: Type.BAND32;
+    readonly mask: number;
+    readonly testMasked: IntegerTest;
+  }
+
 }
 
-export type IntegerTest = IntegerTest.Exact | IntegerTest.Set | IntegerTest.Ranges | IntegerTest.All | IntegerTest.None;
+export type IntegerTest = IntegerTest.Exact | IntegerTest.Set | IntegerTest.Ranges | IntegerTest.All | IntegerTest.None | IntegerTest.BitAnd32;
 
 type Compatible = number | Iterable<number> | Iterable<IntegerTest.Range> | boolean | IntegerTest;
 
@@ -124,5 +131,12 @@ export function testInteger(value: number, test: Compatible): boolean {
       }
       return false;
     }
+    case IntegerTest.Type.BAND32: {
+      return testInteger(value & testObject.mask, testObject.testMasked);
+    }
   }
+}
+
+export function maskedAnd32(mask: number, input: Compatible): IntegerTest {
+  return {type: IntegerTest.Type.BAND32, mask, testMasked: toIntegerTest(input)};
 }
