@@ -10,6 +10,7 @@ export namespace IntegerTest {
     ALL = 'all',
     NONE = 'none',
     BAND32 = 'band32',
+    INVERTED = 'inverted',
   }
 
   export interface Exact {
@@ -50,9 +51,14 @@ export namespace IntegerTest {
     readonly testMasked: IntegerTest;
   }
 
+  export interface Inverted {
+    readonly type: Type.INVERTED;
+    readonly invert: IntegerTest;
+  }
+
 }
 
-export type IntegerTest = IntegerTest.Exact | IntegerTest.Set | IntegerTest.Ranges | IntegerTest.All | IntegerTest.None | IntegerTest.BitAnd32;
+export type IntegerTest = IntegerTest.Exact | IntegerTest.Set | IntegerTest.Ranges | IntegerTest.All | IntegerTest.None | IntegerTest.BitAnd32 | IntegerTest.Inverted;
 
 type Compatible = number | Iterable<number> | Iterable<IntegerTest.Range> | boolean | IntegerTest;
 
@@ -134,9 +140,22 @@ export function testInteger(value: number, test: Compatible): boolean {
     case IntegerTest.Type.BAND32: {
       return testInteger(value & testObject.mask, testObject.testMasked);
     }
+    case IntegerTest.Type.INVERTED: {
+      return !testInteger(value, testObject.invert);
+    }
   }
 }
 
 export function maskedAnd32(mask: number, input: Compatible): IntegerTest {
   return {type: IntegerTest.Type.BAND32, mask, testMasked: toIntegerTest(input)};
+}
+
+export function invertIntegerTest(test: Compatible): IntegerTest {
+  const testObject = toIntegerTest(test);
+  switch (testObject.type) {
+    case IntegerTest.Type.ALL: return NO_INTEGERS;
+    case IntegerTest.Type.NONE: return ALL_INTEGERS;
+    case IntegerTest.Type.INVERTED: return testObject.invert;
+    default: return {type: IntegerTest.Type.INVERTED, invert: testObject};
+  }
 }
