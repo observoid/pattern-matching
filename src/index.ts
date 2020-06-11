@@ -107,3 +107,27 @@ export function matchCaptureArray<TInput, TCapture>(capturer: CaptureMaker<TInpu
     );
   });
 }
+
+export function lookahead<TInput, TMatch>(matcher: MatchMaker<TInput, TMatch>): MatchMaker<TInput, TMatch> {
+  return input => new Observable(subscriber => {
+    matcher(input).subscribe(
+      (m) => subscriber.next({match: m.match, suffix: input, consumedNoInput: true}),
+      (e) => subscriber.error(e),
+      () => subscriber.complete(),
+    );
+  });
+}
+
+export function negativeLookahead<TInput>(matcher: MatchMaker<TInput, unknown>): MatchMaker<TInput, true> {
+  return input => new Observable(subscriber => {
+    let matched = false;
+    matcher(input).subscribe(
+      (_) => { matched = true; },
+      (e) => subscriber.error(e),
+      () => {
+        if (!matched) subscriber.next({match: true, suffix: input, consumedNoInput: true});
+        subscriber.complete();
+      },
+    );
+  });
+}

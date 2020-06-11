@@ -2,6 +2,7 @@
 import {
   match, MatchMaker, matchCaptureArray,
   capture, CaptureMaker, CaptureValue, CaptureComplete, 
+  lookahead, negativeLookahead,
 } from '../lib/index';
 import { TestHarness } from 'zora';
 import { from, of, throwError, ObservableInput } from 'rxjs';
@@ -103,6 +104,28 @@ export default async (t: TestHarness) => {
       t.eq(
         await testMatch([1, 2, 3, 4, 5], matchCaptureArray(capture(match(true), 3, 3))),
         {status: 'matched', match: [1, 2, 3], consumedNoInput: false, suffix: [4, 5]}
+      )
+    });
+
+  });
+
+  t.test('lookahead', async t => {
+
+    t.test('basic usage', async t => {
+      t.eq(
+        await testMatch([1, 2, 3, 4, 5], lookahead(match(true))),
+        {status: 'matched', match: 1, consumedNoInput: true, suffix: [1, 2, 3, 4, 5]}
+      )
+    });
+
+  });
+
+  t.test('negativeLookahead', async t => {
+
+    t.test('basic usage', async t => {
+      t.eq(
+        await testMatch([1, 2, 3, 4, 5], negativeLookahead(match(v => v !== 1))),
+        {status: 'matched', match: true, consumedNoInput: true, suffix: [1, 2, 3, 4, 5]}
       )
     });
 
