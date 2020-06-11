@@ -1,7 +1,7 @@
 
 import {
   match, MatchMaker, matchCaptureArray, firstMatch,
-  capture, CaptureMaker, CaptureValue, CaptureComplete, 
+  capture, CaptureMaker, CaptureValue, CaptureComplete, reduceCaptures, 
   lookahead, negativeLookahead,
 } from '../lib/index';
 import { TestHarness } from 'zora';
@@ -144,6 +144,17 @@ export default async (t: TestHarness) => {
       t.eq(
         await testMatch(['a', 'b', 'c'], firstMatch(match(v => typeof v === 'boolean'), match(v => typeof v === 'number'))),
         { status: 'failed' }
+      )
+    });
+
+  });
+
+  t.test('reduceCaptures', async t => {
+
+    t.test('basic usage', async t => {
+      t.eq(
+        await testMatch([1, 2, 3], reduceCaptures(capture(match(true)), () => 0, (value, capture) => value + capture)),
+        { status: 'matched', match: 6, consumedNoInput: false, suffix: [] }
       )
     });
 

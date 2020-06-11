@@ -88,6 +88,32 @@ export function capture<TInput, TMatch>(
   });
 }
 
+export function reduceCaptures<TInput, TCapture, TReduced>(
+  capturer: CaptureMaker<TInput, TCapture>,
+  createInitial: () => TReduced,
+  reduce: (current: TReduced, capture: TCapture) => TReduced,
+): MatchMaker<TInput, TReduced> {
+  return input => new Observable(subscriber => {
+    let value = createInitial();
+    capturer(input).subscribe(
+      (c) => {
+        if (c.complete) {
+          subscriber.next({
+            match: value,
+            suffix: c.suffix,
+            consumedNoInput: c.consumedNoInput
+          });
+        }
+        else {
+          value = reduce(value, c.capture);
+        }
+      },
+      (e) => subscriber.error(e),
+      () => subscriber.complete(),
+    );
+  });
+}
+
 export function matchCaptureArray<TInput, TCapture>(capturer: CaptureMaker<TInput, TCapture>): MatchMaker<TInput, TCapture[]> {
   return input => new Observable(subscriber => {
     const results = new Array<TCapture>();
