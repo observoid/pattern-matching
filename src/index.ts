@@ -131,3 +131,25 @@ export function negativeLookahead<TInput>(matcher: MatchMaker<TInput, unknown>):
     );
   });
 }
+
+export function firstMatch<TInput, TMatch>(...matchers: MatchMaker<TInput, TMatch>[]): MatchMaker<TInput, TMatch> {
+  return input => new Observable(subscriber => {
+    function next(i: number) {
+      if (i === matchers.length) {
+        subscriber.complete();
+        return;
+      }
+      let matched = false;
+      matchers[i](input).subscribe(
+        (m) => {
+          matched = true;
+          subscriber.next(m);
+          subscriber.complete();
+        },
+        (e) => subscriber.error(e),
+        () => { if (!matched) next(i + 1); },
+      );
+    }
+    next(0);
+  });
+}

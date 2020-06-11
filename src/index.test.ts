@@ -1,6 +1,6 @@
 
 import {
-  match, MatchMaker, matchCaptureArray,
+  match, MatchMaker, matchCaptureArray, firstMatch,
   capture, CaptureMaker, CaptureValue, CaptureComplete, 
   lookahead, negativeLookahead,
 } from '../lib/index';
@@ -126,6 +126,24 @@ export default async (t: TestHarness) => {
       t.eq(
         await testMatch([1, 2, 3, 4, 5], negativeLookahead(match(v => v !== 1))),
         {status: 'matched', match: true, consumedNoInput: true, suffix: [1, 2, 3, 4, 5]}
+      )
+    });
+
+  });
+
+  t.test('firstMatch', async t => {
+
+    t.test('basic usage', async t => {
+      t.eq(
+        await testMatch(['a', 'b', 'c'], firstMatch(match(v => typeof v === 'boolean'), match(v => typeof v === 'string'))),
+        { status: 'matched', match: 'a', suffix: ['b', 'c'], consumedNoInput: false }
+      )
+    });
+
+    t.test('failure', async t => {
+      t.eq(
+        await testMatch(['a', 'b', 'c'], firstMatch(match(v => typeof v === 'boolean'), match(v => typeof v === 'number'))),
+        { status: 'failed' }
       )
     });
 
