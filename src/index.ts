@@ -179,3 +179,10 @@ export function firstMatch<TInput, TMatch>(...matchers: MatchMaker<TInput, TMatc
     next(0);
   });
 }
+
+export function constantMatch<TInput, TConstant>(constant: TConstant): MatchMaker<TInput, TConstant> {
+  return input => new Observable(subscriber => {
+    subscriber.next({match: constant, suffix: input, consumedNoInput: true});
+    subscriber.complete();
+  });  
+}

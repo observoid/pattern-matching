@@ -1,6 +1,6 @@
 
 import {
-  match, MatchMaker, matchCaptureArray, firstMatch,
+  match, MatchMaker, matchCaptureArray, firstMatch, constantMatch,
   capture, CaptureMaker, CaptureValue, CaptureComplete, reduceCaptures, 
   lookahead, negativeLookahead,
 } from '../lib/index';
@@ -155,6 +155,18 @@ export default async (t: TestHarness) => {
       t.eq(
         await testMatch([1, 2, 3], reduceCaptures(capture(match(true)), () => 0, (value, capture) => value + capture)),
         { status: 'matched', match: 6, consumedNoInput: false, suffix: [] }
+      )
+    });
+
+  });
+
+  t.test('constantMatch', async t => {
+
+    t.test('basic usage', async t => {
+      const UNIQUE = Symbol();
+      t.eq(
+        await testMatch([1, 2, 3], constantMatch(UNIQUE)),
+        { status: 'matched', match: UNIQUE, consumedNoInput: true, suffix: [1, 2, 3] }
       )
     });
 
