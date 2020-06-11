@@ -1,8 +1,9 @@
 
-import { Observable, OperatorFunction, empty, ReplaySubject, Subscription } from 'rxjs';
+import { Observable, OperatorFunction, ReplaySubject, Subscription, empty, from } from 'rxjs';
 
 export interface Match<TInput, TMatch> {
   match: TMatch;
+  consumedNoInput?: boolean;
   suffix: Observable<TInput>;
 }
 
@@ -15,6 +16,7 @@ export interface CaptureValue<TCapture> {
 
 export interface CaptureComplete<TInput> {
   complete: true;
+  consumedNoInput?: boolean;
   suffix: Observable<TInput>;
 }
 
@@ -22,74 +24,17 @@ export type Capture<TInput, TCapture> = CaptureValue<TCapture> | CaptureComplete
 
 export type CaptureMaker<TInput, TCapture> = OperatorFunction<TInput, Capture<TInput, TCapture>>;
 
-export function captureInput<TInput>(
-  test: ((value: TInput) => boolean) | '*' = '*',
-  minCount = 0,
-  maxCount = Infinity
-): CaptureMaker<TInput, TInput> {
-  const testFunc = (test === '*') ? () => true : test;
-  return input => new Observable(subscriber => {
-    if (maxCount < 1) {
-      subscriber.next({complete: true, suffix: input});
-      subscriber.complete();
-      return;
-    }
-    const subs = new Subscription();
-    let count = 0;
-    let onError = (e: any) => subscriber.error(e);
-    let onComplete = () => {
-      if (count >= minCount) {
-        subscriber.next({complete: true, suffix: empty()});
-      }
-      subscriber.complete();
-    };
-    let onValue = (value: TInput) => {
-      let addValue;
-      if (testFunc(value)) {
-        subscriber.next({capture: value});
-        if (++count < maxCount) {
-          return;
-        }
-        addValue = false;
-      }
-      else if (count < minCount) {
-        subscriber.complete();
-        subs.unsubscribe();
-        return;
-      }
-      else {
-        addValue = true;
-      }
-      const suffix = new ReplaySubject<TInput>();
-      if (addValue) {
-        suffix.next(value);
-      }
-      onError = e => suffix.error(e);
-      onComplete = () => suffix.complete();
-      onValue = value => suffix.next(value);
-      subscriber.next({complete:true, suffix:suffix});
-      subscriber.complete();
-    };
-    subs.add(input.subscribe(
-      value => onValue(value),
-      e => onError(e),
-      () => onComplete()
-    ));
-    return subs;
-  });
-}
-
-export function matchInput<TInput>(
-  test: ((value: TInput) => boolean) | '*' = '*'
+export function match<TInput>(always: true): MatchMaker<TInput, TInput>;
+export function match<TInput>(testInput: (value: TInput) => boolean): MatchMaker<TInput, TInput>;
+export function match<TInput>(
+  test: true | ((value: TInput) => boolean) = true
 ): MatchMaker<TInput, TInput> {
-  const testFunc = test === '*' ? () => true : test;
+  const testFunc = test === true ? () => true : test;
   return input => new Observable(subscriber => {
-    const subscription = new Subscription();
     let onComplete = () => subscriber.complete();
     let onError = (error: any) => subscriber.error(error);
     let onInput = (match: TInput) => {
       if (!testFunc(match)) {
-        subscription.unsubscribe();
         subscriber.complete();
         return;
       }
@@ -100,107 +45,45 @@ export function matchInput<TInput>(
       subscriber.next({match, suffix});
       subscriber.complete();
     };
-    subscription.add(input.subscribe(
+    input.subscribe(
       input => onInput(input),
       error => onError(error),
-      () => onComplete()));
-    return subscription;
+      () => onComplete());
   });
 }
 
-export function mapCaptures<TInput, TCapIn, TCapOut>(
-  mapFunc: (capture: TCapIn) => TCapOut
-): OperatorFunction<Capture<TInput, TCapIn>, Capture<TInput, TCapOut>> {
-  return input => new Observable(subscriber => {
-    return input.subscribe(
-      (step) => {
-        if (step.complete) {
-          subscriber.next(step);
-        }
-        else {
-          subscriber.next({capture: mapFunc(step.capture)});
-        }
-      },
-      (error) => subscriber.error(error),
-      () => subscriber.complete()
-    )
-  });
-}
-
-export function transformMatch<TInput, TFromMatch, TToMatch>(
-  transformFunc: (v: TFromMatch) => TToMatch
-): OperatorFunction<Match<TInput, TFromMatch>, Match<TInput, TToMatch>> {
-  return input => new Observable(subscriber => {
-    return input.subscribe(
-      ({ match, suffix }) => subscriber.next({match: transformFunc(match), suffix}),
-      e => subscriber.error(e),
-      () => subscriber.complete()
-    );
-  });
-}
-
-export function captureRepeatedMatch<TInput, TMatch>(
+export function capture<TInput, TMatch>(
   matcher: MatchMaker<TInput, TMatch>,
   minCount = 1,
   maxCount = Infinity
 ): OperatorFunction<TInput, Capture<TInput, TMatch>> {
   return input => new Observable(subscriber => {
-    const subs = new Subscription();
-    function next(count: number, input: Observable<TInput>) {
+    function next(count: number, input: Observable<TInput>, consumedInput: boolean) {
       if (count === maxCount) {
-        subscriber.next({complete:true, suffix:input});
+        subscriber.next({complete: true, suffix: input, consumedNoInput: !consumedInput});
         subscriber.complete();
         return;
       }
-      const sub = matcher(input).subscribe(
-        ({ match, suffix }) => {
-          subs.remove(sub);
-          subscriber.next({ capture: match });
-          next(count + 1, suffix);
-        },
-        (error) => subscriber.error(error),
-        () => {
-          if (count >= minCount) {
-            subscriber.next({complete: true, suffix: input});
-          }
-          subscriber.complete();
-        },
-      );
-      subs.add(sub);      
-    }
-    next(0, input);
-    return subs;
-  });
-}
-
-export function matchTuple<TInput, TMatch, TTuple extends TMatch[]>(
-  ...matchers: { [P in keyof TTuple]: MatchMaker<TInput, TTuple[P]> }
-): MatchMaker<TInput, TTuple> {
-  return input => new Observable(subscriber => {
-    const tuple = new Array<TMatch>(matchers.length);
-    const subs = new Subscription();
-    function next(i: number, tokens: Observable<TInput>) {
-      if (i === tuple.length) {
-        subscriber.next({match:tuple as TTuple, suffix:tokens});
-        subscriber.complete();
-        return;
-      }
-      const sub = matchers[i](tokens).subscribe(
-        ({ match, suffix }) => {
-          tuple[i] = match;
-          next(i + 1, suffix);
-          subs.remove(sub);
-        },
-        (error) => {
-          subscriber.error(error);
-        },
-        () => {
-          subscriber.complete();
+      let onError = (e: any) => subscriber.error(e);
+      let onComplete = () => {
+        if (count >= minCount) {
+          subscriber.next({complete: true, suffix: empty(), consumedNoInput: !consumedInput});
         }
+        subscriber.complete();
+      };
+      let onMatch = ({match, suffix, consumedNoInput}: Match<TInput, TMatch>) => {
+        onMatch = () => {};
+        onError = () => {};
+        onComplete = () => {};
+        subscriber.next({ capture: match });
+        next(count + 1, suffix, consumedInput || !consumedNoInput);
+      };
+      matcher(input).subscribe(
+        m => onMatch(m),
+        e => onError(e),
+        () => onComplete(),
       );
-      subs.add(sub);
     }
-    next(0, input);
-    return subs;
+    next(0, input, false);
   });
 }

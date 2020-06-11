@@ -1,344 +1,165 @@
 
-import { TestHarness, Assert } from 'zora';
-import { captureInput, CaptureValue, CaptureComplete, mapCaptures, matchInput, transformMatch } from '../lib/index'
-import { from, Observable, empty, throwError, Subscription, of } from 'rxjs';
+import {
+  match, MatchMaker,
+  capture, CaptureMaker, CaptureValue, CaptureComplete, 
+} from '../lib/index';
+import { TestHarness } from 'zora';
+import { from, of, throwError, ObservableInput } from 'rxjs';
 import { toArray, concatAll } from 'rxjs/operators';
 
-function allValues<T>(obs: Observable<T>): Promise<T[]> {
-  return new Promise((resolve, reject) => {
-    obs.pipe( toArray() ).subscribe({
-      next(value) { resolve(value); },
-      error(e) { reject(e); },
-    });
-  });
-}
+export default async (t: TestHarness) => {
 
-function onlyThrowsError(obs: Observable<unknown>): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const subs = new Subscription();
-    subs.add(obs.subscribe({
-      next(val) {
-        subs.unsubscribe();
-        reject('observable yielded a value');
-      },
-      complete() {
-        reject('observable completed');
-      },
-      error(e) {
-        resolve(e);
-      },
-    }));
-  });
-}
+  await t.test('match', async t => {
 
-async function assertEmptyObservable<T>(t: Assert, obs: Observable<T>): Promise<void> {
-  const result = await allValues(obs);
-  t.eq(result.length, 0);
-}
-
-const mixedContent = ['banana', 33, true] as const;
-
-const mapInput = [1, 2, 3] as const;
-const mapFunc = (v: number) => v * 100;
-const mapOutput = [100, 200, 300] as const;
-
-export default (t: TestHarness) => {
-
-  t.test('captureInput', async t => {
-
-    t.test('all input, any number', async t => {
-      const val = await allValues(
-        from(mixedContent)
-        .pipe(
-          captureInput()
-        )
+    await t.test('filter passes', async t => {
+      t.eq(
+        await testMatch([1, 2, 3], match(num => num % 2 === 1)),
+        {status: 'matched', match: 1, consumedNoInput: false, suffix: [2, 3]},
       );
-      t.eq(val.length, mixedContent.length + 1);
-      for (let i = 0; i < mixedContent.length; i++) {
-        let obj = (val[i] || {}) as CaptureValue<any>;
-        t.falsy(obj.complete);
-        t.eq(obj.capture, mixedContent[i]);
-      }
-      let last = (val[mixedContent.length] || {}) as CaptureComplete<any>;
-      t.eq(last.complete, true);
-      t.ok(last.suffix instanceof Observable);
-      await assertEmptyObservable(t, last.suffix);
     });
 
-    t.test('specific input, any number', async t => {
-      const val = await allValues(
-        from(mixedContent)
-        .pipe(
-          captureInput(v => typeof(v) !== 'boolean')
-        )
+    await t.test('filter fails', async t => {
+      t.eq(
+        await testMatch([1, 2, 3], match(num => num % 2 === 0)),
+        {status: 'failed'},
       );
-      t.eq(val.length, mixedContent.length - 1 + 1);
-      for (let i = 0; i < mixedContent.length-1; i++) {
-        let obj = (val[i] || {}) as CaptureValue<any>;
-        t.falsy(obj.complete);
-        t.eq(obj.capture, mixedContent[i]);
-      }
-      let last = (val[mixedContent.length-1] || {suffix:empty()}) as CaptureComplete<any>;
-      t.eq(last.complete, true);
-      t.ok(last.suffix instanceof Observable);
-      const suffixValues = await allValues(last.suffix);
-      t.eq(suffixValues.length, 1);
-      t.eq(suffixValues[0], true);
     });
 
-    t.test('all input, max count', async t => {
-      const val = await allValues(
-        from(mixedContent)
-        .pipe(
-          captureInput('*', 0, 2)
-        )
+    await t.test('pass-through passes', async t => {
+      t.eq(
+        await testMatch([1, 2, 3], match(true)),
+        {status: 'matched', match: 1, consumedNoInput: false, suffix: [2, 3]},
       );
-      t.eq(val.length, 2 + 1);
-      for (let i = 0; i < 2; i++) {
-        let obj = (val[i] || {}) as CaptureValue<any>;
-        t.falsy(obj.complete);
-        t.eq(obj.capture, mixedContent[i]);
-      }
-      let last = (val[2] || {}) as CaptureComplete<any>;
-      t.eq(last.complete, true);
-      t.ok(last.suffix instanceof Observable);
-      const suffixValues = await allValues(last.suffix);
-      t.eq(suffixValues, mixedContent.slice(2));
     });
 
-    t.test('filtered input, min count, failure', async t => {
-      const val = await allValues(
-        from(mixedContent)
-        .pipe(
-          captureInput(v => typeof v !== 'boolean', 3)
-        )
-      );
-      t.falsy(val[val.length-1]?.complete);
-    });
-
-    t.test('error on capture', async t => {
-      const myError = new Error('test error');
-      let gotError, errorMessage;
-      try {
-        gotError = await onlyThrowsError(throwError(myError).pipe(captureInput()));
-        errorMessage = null;
-      }
-      catch (msg) {
-        gotError = null;
-        errorMessage = msg;
-      }
-      t.ok(gotError === myError, 'throws correct error');
-    });
-
-    t.test('error on suffix', async t => {
-      const myError = new Error('test error');
-      const val = await allValues(
-        of( of(1), throwError(myError) )
-        .pipe(
-          concatAll(),
-          captureInput('*', 1, 1)
-        )
-      );
-      t.eq(val.length, 2);
-      let gotError;
-      try {
-        gotError = await onlyThrowsError(((val[1] || {}) as CaptureComplete<any>).suffix || empty());
-      }
-      catch (e) {
-        console.error(e);
-        gotError = null;
-      }
-      t.eq(gotError, myError, 'throws correct error');
-    });
-
-    t.test('error on suffix of zero length capture', async t => {
-      const myError = new Error('test error');
-      const val = await allValues(
-        throwError(myError)
-        .pipe(
-          captureInput('*', 0, 0)
-        )
-      );
-      t.eq(val.length, 1);
-      let gotError;
-      try {
-        gotError = await onlyThrowsError(((val[0] || {}) as CaptureComplete<any>).suffix || empty());
-      }
-      catch (e) {
-        console.error(e);
-        gotError = null;
-      }
-      t.eq(gotError, myError, 'throws correct error');
-    });
-
-  });
-
-  t.test('mapCaptures', async t => {
-    const val = await allValues(
-      from(mapInput)
-      .pipe(
-        captureInput(),
-        mapCaptures(mapFunc),
+    await t.test('pass-through fails', async t => {
+      t.eq(
+        await testMatch([], match(true)),
+        {status: 'failed'}
       )
-    );
-    t.eq(val.length, mapOutput.length + 1);
-    for (let i = 0; i < mapOutput.length; i++) {
-      let obj = (val[i] || {}) as CaptureValue<any>;
-      t.falsy(obj.complete);
-      t.eq(obj.capture, mapOutput[i]);
-    }
-    let last = (val[mapOutput.length] || {}) as CaptureComplete<any>;
-    t.eq(last.complete, true);
-    t.ok(last.suffix instanceof Observable);
-    await assertEmptyObservable(t, last.suffix);
+    });
+
+    await t.test('match error', async t => {
+      const testError = new Error('test error');
+      t.eq(
+        await testMatch(throwError(testError), match(true)),
+        {status: 'matchError', error: testError},
+      );
+    });
+
+    await t.test('suffix error', async t => {
+      const testError = new Error('test error');
+      t.eq(
+        await testMatch(of([1], throwError(testError)).pipe(concatAll()), match(true)),
+        {status: 'suffixError', error: testError},
+      );
+    });
+
   });
 
-  t.test('matchInput', async t => {
+  await t.test('capture', async t => {
 
-    t.test('any input', async t => {
-      const val = await allValues(
-        from(mixedContent)
-        .pipe(
-          matchInput(),
-        )
-      );
-      t.eq(val.length, 1);
-      t.eq(val[0].match, mixedContent[0]);
-      const suffixValues = await allValues(val[0].suffix);
-      t.eq(suffixValues.length, mixedContent.length-1);
-      for (let i = 1; i < mixedContent.length; i++) {
-        t.eq(suffixValues[i-1], mixedContent[i]);
-      }
+    await t.test('as many as possible', async t => {
+      t.eq(
+        await testCapture([1, 2, 3], capture(match(true))),
+        {status: 'captured', consumedNoInput: false, captures: [1, 2, 3], suffix: []},
+      )
     });
 
-    t.test('filtered input, success', async t => {
-      const val = await allValues(
-        from(mixedContent)
-        .pipe(
-          matchInput(v => typeof v === 'string'),
-        )
-      );
-      t.eq(val.length, 1);
-      t.eq(val[0].match, mixedContent[0]);
-      const suffixValues = await allValues(val[0].suffix);
-      t.eq(suffixValues.length, mixedContent.length-1);
-      for (let i = 1; i < mixedContent.length; i++) {
-        t.eq(suffixValues[i-1], mixedContent[i]);
-      }
+    await t.test('at least 3', async t => {
+      t.eq(
+        await testCapture([1, 2, 3, 4, 5], capture(match(true), 3)),
+        {status: 'captured', consumedNoInput: false, captures: [1, 2, 3, 4, 5], suffix: []},
+      )
     });
 
-    t.test('filtered input, failure', async t => {
-      const val = await allValues(
-        from(mixedContent)
-        .pipe(
-          matchInput(_ => false),
-        )
-      );
-      t.eq(val.length, 0);
+    await t.test('at least 3, but fail', async t => {
+      t.eq(
+        await testCapture([1, 2], capture(match(true), 3)),
+        {status: 'failed'},
+      )
     });
 
-    t.test('no input', async t => {
-      const val = await allValues(
-        empty()
-        .pipe(
-          matchInput(),
-        )
-      );
-      t.eq(val.length, 0);
+    await t.test('at most 3', async t => {
+      t.eq(
+        await testCapture([1, 2, 3, 4, 5], capture(match(true), 0, 3)),
+        {status: 'captured', consumedNoInput: false, captures: [1, 2, 3], suffix: [4, 5]},
+      )
     });
 
-    t.test('error on match', async t => {
-      const myError = new Error('test error');
-      let gotError, errorMessage;
+    await t.test('error', async t => {
+      const testError = new Error('test error');
+      t.eq(
+        await testCapture(throwError(testError), capture(match(true))),
+        {status: 'captureError', error: testError},
+      );
+    });
+
+  });
+
+}
+
+type MatchTestResult<TInput, TMatch> = {status:'failed'}
+  | {status:'matched', match:TMatch, suffix: TInput[], consumedNoInput: boolean}
+  | {status:'matchError' | 'suffixError', error?: any};
+
+async function testMatch<TInput, TMatch>(input: ObservableInput<TInput>, matcher: MatchMaker<TInput, TMatch>)
+: Promise<MatchTestResult<TInput, TMatch>> {
+  try {
+    const results = await from(input).pipe(matcher, toArray()).toPromise();
+    if (results.length === 0) return {status:'failed'};
+    if (results.length === 1) {
       try {
-        gotError = await onlyThrowsError(throwError(myError).pipe(matchInput()));
-        errorMessage = null;
-      }
-      catch (msg) {
-        gotError = null;
-        errorMessage = msg;
-      }
-      t.ok(gotError === myError, 'throws correct error');
-    });
-
-    t.test('error on suffix', async t => {
-      const myError = new Error('test error');
-      const val = await allValues(
-        of( of(1), throwError(myError) )
-        .pipe(
-          concatAll(),
-          matchInput()
-        )
-      );
-      t.eq(val.length, 1);
-      let gotError;
-      try {
-        gotError = await onlyThrowsError((val[0] || {}).suffix || empty());
+        return {
+          status: 'matched',
+          match: results[0].match,
+          consumedNoInput: !!results[0].consumedNoInput,
+          suffix: await results[0].suffix.pipe( toArray() ).toPromise()
+        };
       }
       catch (e) {
-        gotError = null;
+        return {status:'suffixError', error: e};
       }
-      t.eq(gotError, myError, 'throws correct error');
-    });
+    }
+    return {status:'matchError', error: `matcher provided ${results.length} values`};
+  }
+  catch (e) {
+    return {status:'matchError', error: e};
+  }
+}
 
-  });
+type CaptureTestResult<TInput, TCapture> = {status:'failed'}
+  | {status:'captured', captures: TCapture[], suffix: TInput[], consumedNoInput: boolean}
+  | {status:'captureError' | 'suffixError', error?: any};
 
-  t.test('transformMatch', async t => {
+async function testCapture<TInput, TCapture>(input: ObservableInput<TInput>, capturer: CaptureMaker<TInput, TCapture>)
+: Promise<CaptureTestResult<TInput, TCapture>> {
+  try {
+    const results = await from(input).pipe(capturer, toArray()).toPromise();
+    if (results.length === 0 || !results[results.length-1].complete) return {status:'failed'};
+    const captureValues = results.slice(0, -1) as CaptureValue<TCapture>[];
+    const captureResult = results[results.length-1] as CaptureComplete<TInput>;
+    try {
+      const suffix = await captureResult.suffix.pipe( toArray() ).toPromise();
+      return {
+        status: 'captured',
+        captures: captureValues.map(v => v.capture),
+        consumedNoInput: !!captureResult.consumedNoInput,
+        suffix,
+      };
+    }
+    catch (e) {
+      return {status:'suffixError', error: e};
+    }
+  }
+  catch (e) {
+    return {status:'captureError', error: e};
+  }
+}
 
-    t.test('success', async t => {
-      
-      const val = await allValues(
-        of(1, 2, 3)
-        .pipe(
-          matchInput(),
-          transformMatch(v => v * 10)
-        )
-      );
-
-      t.eq(val.length, 1);
-      t.eq(val[0].match, 1 * 10);
-
-      const suffixValues = await allValues(val[0].suffix);
-
-      t.eq(suffixValues, [2, 3]);
-
-    });
-
-    t.test('failure', async t => {
-      
-      const val = await allValues(
-        empty()
-        .pipe(
-          transformMatch(v => v)
-        )
-      );
-
-      t.eq(val.length, 0);
-
-    });
-
-    t.test('input error', async t => {
-      
-      const myError = new Error('test error');
-
-      let gotError, errorMessage;
-      try {
-        gotError = await onlyThrowsError(
-          throwError(myError)
-          .pipe(
-            transformMatch(v => v)
-          )
-        );
-        errorMessage = null;
-      }
-      catch (msg) {
-        gotError = null;
-        errorMessage = msg;
-      }
-      t.ok(gotError === myError, 'throws correct error');
-      
-    });
-
-  });
-
+function timeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    promise.then(resolve);
+    setTimeout(() => reject(new Error('timeout')), ms);
+  })
 }
