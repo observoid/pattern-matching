@@ -87,3 +87,23 @@ export function capture<TInput, TMatch>(
     next(0, input, false);
   });
 }
+
+export function matchCaptureArray<TInput, TCapture>(capturer: CaptureMaker<TInput, TCapture>): MatchMaker<TInput, TCapture[]> {
+  return input => new Observable(subscriber => {
+    const results = new Array<TCapture>();
+    capturer(input).subscribe(
+      (cap) => {
+        if (cap.complete) {
+          subscriber.next({match: results, suffix: cap.suffix, consumedNoInput: cap.consumedNoInput});
+        }
+        else {
+          results.push(cap.capture);
+        }
+      },
+      (e) => subscriber.error(e),
+      () => {
+        subscriber.complete();
+      },
+    );
+  });
+}

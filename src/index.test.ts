@@ -1,6 +1,6 @@
 
 import {
-  match, MatchMaker,
+  match, MatchMaker, matchCaptureArray,
   capture, CaptureMaker, CaptureValue, CaptureComplete, 
 } from '../lib/index';
 import { TestHarness } from 'zora';
@@ -97,6 +97,17 @@ export default async (t: TestHarness) => {
 
   });
 
+  t.test('matchCaptureArray', async t => {
+
+    t.test('basic usage', async t => {
+      t.eq(
+        await testMatch([1, 2, 3, 4, 5], matchCaptureArray(capture(match(true), 3, 3))),
+        {status: 'matched', match: [1, 2, 3], consumedNoInput: false, suffix: [4, 5]}
+      )
+    });
+
+  });
+
 }
 
 type MatchTestResult<TInput, TMatch> = {status:'failed'}
@@ -155,11 +166,4 @@ async function testCapture<TInput, TCapture>(input: ObservableInput<TInput>, cap
   catch (e) {
     return {status:'captureError', error: e};
   }
-}
-
-function timeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    promise.then(resolve);
-    setTimeout(() => reject(new Error('timeout')), ms);
-  })
 }
