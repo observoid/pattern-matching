@@ -189,20 +189,5 @@ export function constantMatch<TInput, TConstant>(constant: TConstant): MatchMake
 
 export function optionalMatch<TInput, TMatch extends Exclude<unknown, null>>(matcher: MatchMaker<TInput, TMatch>)
 : MatchMaker<TInput, TMatch | null> {
-  return input => new Observable(subscriber => {
-    let matched = false;
-    matcher(input).subscribe(
-      (m) => {
-        matched = true;
-        subscriber.next(m);
-        subscriber.complete();
-      },
-      (e) => subscriber.error(e),
-      () => {
-        if (!matched) {
-          subscriber.next({match: null, consumedNoInput: true, suffix: input});
-        }
-      }
-    )
-  });
+  return firstMatch(matcher, constantMatch(null));
 }
