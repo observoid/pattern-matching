@@ -1,6 +1,6 @@
 
 import {
-  match, MatchMaker, matchCaptureArray, firstMatch, constantMatch,
+  match, MatchMaker, matchCaptureArray, firstMatch, constantMatch, optionalMatch,
   capture, CaptureMaker, CaptureValue, CaptureComplete, reduceCaptures, 
   lookahead, negativeLookahead,
 } from '../lib/index';
@@ -168,6 +168,34 @@ export default async (t: TestHarness) => {
         await testMatch([1, 2, 3], constantMatch(UNIQUE)),
         { status: 'matched', match: UNIQUE, consumedNoInput: true, suffix: [1, 2, 3] }
       )
+    });
+
+  });
+
+  t.test('optionalMatch', async t => {
+
+    t.test('basic usage', async t => {
+
+      t.eq(
+        await testMatch([1, 2, 3], optionalMatch(match(v => v === 1))),
+        { status: 'matched', match: 1, consumedNoInput: false, suffix: [2, 3] }
+      );
+
+      t.eq(
+        await testMatch([1, 2, 3], optionalMatch(match(v => v === -1))),
+        { status: 'matched', match: null, consumedNoInput: true, suffix: [1, 2, 3] }
+      );
+      
+    });
+
+    t.test('error', async t => {
+      const error = new Error('test error');
+
+      t.eq(
+        await testMatch(throwError(error), optionalMatch(match(true))),
+        { status: 'matchError', error }
+      );
+
     });
 
   });
